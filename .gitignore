@@ -1,0 +1,6 @@
+checkpoints/
+.venv/
+vggss_dataset/
+VGGSound-test-plus-silent/
+vggsound10k_dataset/
+__pycache__

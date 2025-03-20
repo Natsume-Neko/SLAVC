@@ -77,7 +77,7 @@ def main(args):
 
 def main_worker(local_rank, ngpus_per_node, args):
     args.gpu = local_rank
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     # Model dir
     model_dir = os.path.join(args.model_dir, args.experiment_name)
@@ -110,22 +110,24 @@ def main_worker(local_rank, ngpus_per_node, args):
         Unsqueeze(1)
     )
     # object_saliency_model.fc = nn.Unflatten(1, (512, 7, 7))
-
-    if not torch.cuda.is_available():
-        print('using CPU, this will be slow')
-    else:
-        if args.gpu is not None:
-            torch.cuda.set_device(args.gpu)
-            audio_visual_model.cuda(args.gpu)
-            object_saliency_model.cuda(args.gpu)
-            if args.multiprocessing_distributed:
-                audio_visual_model = torch.nn.parallel.DistributedDataParallel(audio_visual_model, device_ids=[args.gpu])
-                object_saliency_model = torch.nn.parallel.DistributedDataParallel(object_saliency_model, device_ids=[args.gpu])
+    device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
+    # if not torch.mps.is_available():
+    #     print('using CPU, this will be slow')
+    # else:
+    #     if args.gpu is not None:
+    #         torch.cuda.set_device(args.gpu)
+    #         audio_visual_model.cuda(args.gpu)
+    #         object_saliency_model.cuda(args.gpu)
+    #         if args.multiprocessing_distributed:
+    #             audio_visual_model = torch.nn.parallel.DistributedDataParallel(audio_visual_model, device_ids=[args.gpu])
+    #             object_saliency_model = torch.nn.parallel.DistributedDataParallel(object_saliency_model, device_ids=[args.gpu])
+    audio_visual_model.to(device)
+    object_saliency_model.to(device)
 
     # Load weights
     ckp_fn = os.path.join(model_dir, 'latest.pth')
     if os.path.exists(ckp_fn):
-        ckp = torch.load(ckp_fn, map_location='cpu')
+        ckp = torch.load(ckp_fn, map_location='cpu', weights_only=False)
         audio_visual_model.load_state_dict({k.replace('module.', ''): ckp['model'][k] for k in ckp['model']})
         print(f'loaded from {os.path.join(model_dir, "latest.pth")}')
     else:
@@ -152,9 +154,11 @@ def validate(testdataloader, audio_visual_model, object_saliency_model, model_di
     evaluator_obj = utils.EvaluatorFull(default_conf_thr=0.5, pred_size=args.pred_size,  pred_thr=args.pred_thr, results_dir=f"{model_dir}/obj")
     evaluator_av_obj = utils.EvaluatorFull(default_conf_thr=0.5, pred_size=args.pred_size,  pred_thr=args.pred_thr, results_dir=f"{model_dir}/av_obj")
     for step, (image, spec, bboxes, name) in enumerate(testdataloader):
-        if args.gpu is not None:
-            spec = spec.cuda(args.gpu, non_blocking=True)
-            image = image.cuda(args.gpu, non_blocking=True)
+        # if args.gpu is not None:
+        #     spec = spec.cuda(args.gpu, non_blocking=True)
+        #     image = image.cuda(args.gpu, non_blocking=True)
+        spec = spec.to(torch.device("mps"), dtype=torch.float32, non_blocking=True)
+        image = image.to(torch.device("mps"), dtype=torch.float32, non_blocking=True)
 
         # Compute S_AVL
         heatmap_av = audio_visual_model(image.float(), spec.float(), mode='test')[1].unsqueeze(1)

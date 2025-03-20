@@ -56,8 +56,10 @@ def load_audio_av(path=None, container=None, rate=None, start_time=None, duratio
         try:
             frame.pts = None
             if resampler is not None:
-                chunks.append((chunk_start_time, resampler.resample(frame).to_ndarray()))
+                # print(len(resampler.resample(frame)[0]))
+                chunks.append((chunk_start_time, resampler.resample(frame)[0].to_ndarray()))
             else:
+                # print(len(frame))
                 chunks.append((chunk_start_time, frame.to_ndarray()))
         except AttributeError:
             break

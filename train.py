@@ -94,7 +94,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
-
+    device = torch.device("mps")
     # Setup distributed environment
     if args.multiprocessing_distributed:
         if args.dist_url == "env://" and args.rank == -1:
@@ -134,21 +134,22 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         raise ValueError
 
-    if not torch.cuda.is_available():
-        print('using CPU, this will be slow')
-    elif args.multiprocessing_distributed:
-        if args.gpu is not None:
-            torch.cuda.set_device(args.gpu)
-            model.cuda(args.gpu)
-            # When using a single GPU per process and per
-            # DistributedDataParallel, we need to divide the batch size
-            # ourselves based on the total number of GPUs we have
-            args.batch_size = int(args.batch_size / args.world_size)
-            args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-    elif args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model.cuda(args.gpu)
+    # if not torch.cuda.is_available():
+    #     print('using CPU, this will be slow')
+    # elif args.multiprocessing_distributed:
+    #     if args.gpu is not None:
+    #         torch.cuda.set_device(args.gpu)
+    #         model.cuda(args.gpu)
+    #         # When using a single GPU per process and per
+    #         # DistributedDataParallel, we need to divide the batch size
+    #         # ourselves based on the total number of GPUs we have
+    #         args.batch_size = int(args.batch_size / args.world_size)
+    #         args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
+    #         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+    # elif args.gpu is not None:
+    #     torch.cuda.set_device(args.gpu)
+    #     model.cuda(args.gpu)
+    model.to(device)
     print(model)
 
     # Optimizer
@@ -260,6 +261,8 @@ def train_semi(train_loader, model, optimizer, epoch, args, writer):
     loss_mtr = AverageMeter('Loss', ':.3f')
     unsup_loss_mtr = AverageMeter('UnsupLoss', ':.3f')
     sup_loss_mtr = AverageMeter('SupLoss', ':.3f')
+    
+    device = torch.device("mps")
 
     progress = ProgressMeter(
         len(train_loader),
@@ -273,11 +276,15 @@ def train_semi(train_loader, model, optimizer, epoch, args, writer):
         global_step = i + len(train_loader) * epoch
         utils.adjust_learning_rate(optimizer, epoch + i / len(train_loader), args)
 
-        if args.gpu is not None:
-            spec = spec.cuda(args.gpu, non_blocking=True)
-            image = image.cuda(args.gpu, non_blocking=True)
-            gt_map = bboxes['gt_map'].cuda(args.gpu, non_blocking=True)
-            gt_mask = bboxes['gt_mask'].cuda(args.gpu, non_blocking=True)
+        # if args.gpu is not None:
+            # spec = spec.cuda(args.gpu, non_blocking=True)
+            # image = image.cuda(args.gpu, non_blocking=True)
+            # gt_map = bboxes['gt_map'].cuda(args.gpu, non_blocking=True)
+            # gt_mask = bboxes['gt_mask'].cuda(args.gpu, non_blocking=True)
+        spec = spec.to(device, dtype=torch.float32, non_blocking=True)
+        image = image.to(device, dtype=torch.float32, non_blocking=True)
+        gt_map = bboxes['gt_map'].to(device, dtype=torch.float32, non_blocking=True)
+        gt_mask = bboxes['gt_mask'].to(device, dtype=torch.float32, non_blocking=True)
 
         unsup_loss, avl_map = model(image.float(), spec.float())
         # supervised loss
@@ -329,9 +336,13 @@ def train(train_loader, model, optimizer, epoch, args, writer):
         global_step = i + len(train_loader) * epoch
         utils.adjust_learning_rate(optimizer, epoch + i / len(train_loader), args)
 
-        if args.gpu is not None:
-            spec = spec.cuda(args.gpu, non_blocking=True)
-            image = image.cuda(args.gpu, non_blocking=True)
+        # if args.gpu is not None:
+        #     spec = spec.cuda(args.gpu, non_blocking=True)
+        #     image = image.cuda(args.gpu, non_blocking=True)
+        device = torch.device('mps')
+        spec = spec.to(device, dtype=torch.float32, non_blocking=True)
+        image = image.to(device, dtype=torch.float32, non_blocking=True)
+
 
         loss, _ = model(image.float(), spec.float())
         loss_mtr.update(loss.item(), image.shape[0])
@@ -361,9 +372,12 @@ def validate(test_loader, model, args):
     model.train(False)
     evaluator = utils.EvaluatorFull()
     for step, (image, spec, bboxes, name) in enumerate(test_loader):
-        if torch.cuda.is_available():
-            spec = spec.cuda(args.gpu, non_blocking=True)
-            image = image.cuda(args.gpu, non_blocking=True)
+        if torch.mps.is_available():
+            # spec = spec.cuda(args.gpu, non_blocking=True)
+            # image = image.cuda(args.gpu, non_blocking=True)
+            device = torch.device('mps')
+            spec = spec.to(device, dtype=torch.float32, non_blocking=True)
+            image = image.to(device, dtype=torch.float32, non_blocking=True)
 
         avl_map = model(image.float(), spec.float(), mode='test')[1].unsqueeze(1)
         avl_map = F.interpolate(avl_map, size=(224, 224), mode='bicubic', align_corners=False)

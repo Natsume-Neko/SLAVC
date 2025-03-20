@@ -1,0 +1,25 @@
+[project]
+name = "slavc"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "av",
+    "certifi",
+    "dataclasses",
+    "fire",
+    "joblib",
+    "numpy>1.22.4",
+    "opencv-python>=4.11.0.86",
+    "Pillow",
+    "scikit-learn",
+    "scipy",
+    "six",
+    "tensorboardx>=2.6.2.2",
+    "termcolor",
+    "threadpoolctl",
+    "timm>=1.0.15",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "typing_extensions",
+]
